@@ -13,6 +13,7 @@ public:
     void add_value(int port, int value);
     bool operator<=(const VectorClock& other) const;
     void setAppId(int port);
+    int getValueByPort(int port);
     std::map<int, int> get_clock() const;
     std::string to_string() const;
 

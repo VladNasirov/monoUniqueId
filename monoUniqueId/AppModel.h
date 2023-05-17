@@ -1,5 +1,4 @@
 #pragma once
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include "UniqueIdGenerator.h"
 #include "MessageQueue.h"
 #include <string>
@@ -9,35 +8,35 @@
 #include <cppconn/exception.h>
 #include <cppconn/prepared_statement.h>
 
-
-
 class AppModel {
 public:
-    AppModel(const char* ip_address, int port_number, MessageQueue& MesQue, UniqueIdGenerator& idgen);
+    AppModel(const char* ip_address, int port_number, std::shared_ptr<MessageQueue> Que, std::shared_ptr<UniqueIdGenerator> idgen);
     AppModel(const AppModel& other);
     ~AppModel();
     bool sendDataToRemoteAppModel(const char* remoteIp, int remotePort);
-    int getCounter();
-    std::chrono::nanoseconds uptime() const;
     bool receiveDataFromRemoteAppModel();
+
     void insertMessageToDBbyId(Message& msg);
     void insertMessageToDBbyUniqueId(Message& msg);
+
     void close();
-    void setVC(VectorClock vec);
+
     void incCounter();
     void decCounter();
-    
+
     const char* getAddr();
     int getPort();
-    
-    bool isAvailable();
-    
+    int getCounter();
+    std::chrono::nanoseconds uptime() const;
+    void setVC(VectorClock vec);
+
     void start_recv();
     void stop_recv();
 private:
     const char* SERVER_IP;
     int PORT;
     bool is_recv;
+    bool is_proc;
     static const int BUFFER_SIZE = 1024;
     WSADATA wsaData;
     SOCKET sendSocket;
@@ -46,10 +45,11 @@ private:
     std::chrono::time_point<std::chrono::system_clock> start_time_;
     std::mutex mutex_;
     std::mutex dbMutex_;
+    std::mutex recvAPPMutex_;
     std::mutex counterMutex_;
-    UniqueIdGenerator id_gen;
+    std::shared_ptr<UniqueIdGenerator> id_gen;
     VectorClock vc;
-    MessageQueue* MesQue;
+    std::shared_ptr<MessageQueue> MesQue;
 
     
 };

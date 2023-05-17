@@ -4,7 +4,7 @@ std::mutex uniquedb_mtx;
 std::mutex db_mtx;
 std::mutex sendMutex_;
 std::mutex recvMutex_;
-AppModel::AppModel(const char* ip_address, int port_number, MessageQueue& MesQue, UniqueIdGenerator& idgen):id_gen(idgen) {
+AppModel::AppModel(const char* ip_address, int port_number, std::shared_ptr<MessageQueue> Que, std::shared_ptr<UniqueIdGenerator> idgen):id_gen(idgen), MesQue(Que) {
     start_time_ = std::chrono::system_clock::now();
     SERVER_IP = ip_address;
     PORT = port_number;
@@ -20,10 +20,12 @@ void AppModel::start_recv() {
     std::thread receivingThread(&AppModel::receiveDataFromRemoteAppModel, this);
     receivingThread.detach();
 }
+
 void AppModel::stop_recv()
 {
     is_recv = false;
 }
+
 void AppModel::incCounter()
 {
     std::lock_guard<std::mutex> lock(counterMutex_);
@@ -87,7 +89,7 @@ bool AppModel::sendDataToRemoteAppModel(const char* remoteIp, int remotePort) {
         vc.increment(PORT);
         incCounter();
         Message message(counter_, client_addr, remotePort, "0", vc);
-       /* std::cout << "Send Counter = " << counter_ << std::endl;*/
+       /*std::cout << "Send Counter = " << counter_ << std::endl;*/
         std::ostringstream oss(request);
         oss << message;
         request = oss.str();
@@ -105,7 +107,7 @@ bool AppModel::sendDataToRemoteAppModel(const char* remoteIp, int remotePort) {
 
     WSACleanup();
     //state_ = ServerState::kIdle;
-    std::this_thread::sleep_for(std::chrono::milliseconds(700));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     return true;
 }
 
@@ -162,7 +164,7 @@ bool AppModel::receiveDataFromRemoteAppModel() {
             char buffer[BUFFER_SIZE];
             memset(buffer, 0, BUFFER_SIZE);
             int bytesReceived;
-                //std::lock_guard<std::mutex> lock(recvMutex_);
+                
                 bytesReceived = recv(clientSocket, buffer, BUFFER_SIZE, 0);
                 if (bytesReceived == SOCKET_ERROR) {
                     std::cerr << "Error receiving data: " << WSAGetLastError() << std::endl;
@@ -171,14 +173,17 @@ bool AppModel::receiveDataFromRemoteAppModel() {
                 }
                 else
             {
-                
+
+                //std::lock_guard<std::mutex> lock(recvAPPMutex_);
                 std::string message_str(buffer, bytesReceived);
                 std::istringstream iss(message_str);
                 Message message;
                 iss >> message;
-                vc.update(message.MessageClock);
-                MesQue->Push(message);
                 insertMessageToDBbyId(message);
+                vc.update(message.MessageClock);
+                insertMessageToDBbyUniqueId(message);
+                MesQue->Push(message);
+                
             }
         }
         closesocket(clientSocket);
@@ -227,7 +232,7 @@ void AppModel::insertMessageToDBbyId(Message& msg) {
 void AppModel::insertMessageToDBbyUniqueId(Message& msg) {
     std::lock_guard<std::mutex> lock(db_mtx);
     try {
-        msg.changeRequestId(id_gen.generateUniqueId(PORT, uptime()));
+        msg.changeRequestId(id_gen->generateUniqueId(msg.MessageClock.getValueByPort(ntohs(msg.client_address.sin_port)),PORT, uptime()));
         // MySQL
         sql::Driver* driver;
         sql::Connection* con;
@@ -251,22 +256,22 @@ void AppModel::insertMessageToDBbyUniqueId(Message& msg) {
        std::cout << "SQL error: " << e.what() << std::endl;
     }
 }
-void AppModel::processMessageQueue() {
-    while (true) {
-        // Получаем сообщения с нужным портом из очереди
-        std::vector<Message> messages = MesQue.GetMessagesByPort(PORT);
-
-        // Обрабатываем каждое сообщение
-        for (const auto& message : messages) {
-            // Генерируем уникальный идентификатор
-            std::string uniqueId = id_gen.generateUniqueId(PORT, uptime());
-
-            // Создаем копию сообщения и изменяем идентификатор
-            Message modifiedMessage = message;
-            modifiedMessage.changeRequestId(uniqueId);
-
-            // Вставляем сообщение в базу данных
-            insertMessageToDBbyUniqueId(modifiedMessage);
-        }
-    }
-}
+//void AppModel::processMessageQueue() {
+//    while (is_recv||!(MesQue->IsEmpty())) {
+//        // Получаем сообщения с нужным портом из очереди
+//        std::vector<Message> messages = MesQue->GetMessagesByPort(PORT);
+//
+//        // Обрабатываем каждое сообщение
+//        for (const auto& message : messages) {
+//            // Генерируем уникальный идентификатор
+//            std::string uniqueId = id_gen->generateUniqueId(PORT, uptime());
+//
+//            // Создаем копию сообщения и изменяем идентификатор
+//            Message modifiedMessage = message;
+//            modifiedMessage.changeRequestId(uniqueId);
+//
+//            // Вставляем сообщение в базу данных
+//            insertMessageToDBbyUniqueId(modifiedMessage);
+//        }
+//    }
+//}

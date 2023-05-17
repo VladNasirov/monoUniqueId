@@ -12,7 +12,7 @@ public:
     UniqueIdGenerator(UniqueIdGenerator& other);
 
     // Метод для генерации уникального идентификатора на основе временной метки
-    std::string generateUniqueId(int server_id, std::chrono::nanoseconds server_time);
+    std::string generateUniqueId(int timestomp, int port, std::chrono::nanoseconds server_time);
 
 private:
     std::mt19937 generator_;

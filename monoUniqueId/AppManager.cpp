@@ -1,116 +1,122 @@
-//#pragma once
-//#include "AppManager.h"
-//AppManager::AppManager(int numApps, int numRequests, int per) {
-//    period = per;
-//    UniqueIdGenerator id_gen;
-//    for (int i = 0; i < numApps; ++i) {
-//        int port = generatePort();
-//        apps.emplace_back(SERVER_IP, port, id_gen);
-//        appAddresses.push_back(SERVER_IP);
-//        appPorts.push_back(port);
-//    }
-//    this->numRequests = numRequests;
-//    this->numApps = numApps;
-//
-//    threads.reserve(numApps);
-//    for (int i = 0; i < numApps; ++i) {
-//        threads.emplace_back(&AppManager::runApp, this, i);
-//    }
-//}
-//void AppManager::stop() {
-//    // Остановить работу потоков
-//    for (auto& thread : threads) {
-//        if (thread.joinable()) {
-//            thread.join();
-//        }
-//    }
-//
-//    // Вызвать деструкторы для объектов AppModel
-//    for (auto& app : apps) {
-//        app.close();
-//    }
-//}
-//AppManager::~AppManager() {
-//    stop();
-//}
-////int AppManager::findMinCounterIndex() {
-////    int minIndex = 0;
-////    for (int i = 0; i < apps.size() - 1; ++i) {
-////        if (apps[i].getCounter() < apps[minIndex].getCounter()) {
-////            minIndex = i;
-////        }
-////    }
-////    return minIndex;
-////}
-//int AppManager::generatePort() {
-//    std::random_device rd;
-//    std::mt19937 gen(rd());
-//    std::uniform_int_distribution<> distrib(5000, 6000);
-//    return distrib(gen);
-//}
-//int AppManager::GenerateReciver(int i)
-//{
-//    //mutex
-//    std::random_device rd;
-//    std::mt19937 gen(rd());
-//   std::uniform_int_distribution<> distrib(0, numApps - 1);
-//   int recvindex;
-//   do {       
-//       recvindex = distrib(gen);
-//   } while (i == recvindex && apps[recvindex].getState()==ServerState::kIdle);
-//   return recvindex;
-//
-//}
-//int AppManager::countFreeApps() {
-//    int count = 0;
-//    for (auto& app : apps) {
-//        if (app.isAvailable()) {
-//            count++;
-//        }
-//    }
-//    return count;
-//}
-//int AppManager::GenerateSender(int i) {
-//    std::random_device rd;
-//    std::mt19937 gen(rd());
-//    std::uniform_int_distribution<> distrib(0, numApps - 1);
-//    int senderIndex;
-//    do {
-//        senderIndex = distrib(gen);
-//    } while (i == senderIndex && apps[senderIndex].getState() == ServerState::kIdle);
-//    return senderIndex;
-//}
-//void AppManager::dataExchange(int sender, int reciever) {
-//    // Получаем ссылки на объекты AppModel по индексам
-//    AppModel& app1 = apps[sender];
-//    AppModel& app2 = apps[reciever];
-//   
-//    // Принимаем данные для app2
-//    app2.receiveDataFromRemoteAppModel();
-//
-//    // Отправляем данные от app1 к app2
-//    app1.sendDataToRemoteAppModel(app2.getAddr(), app2.getPort());
-//}
-//
-//void AppManager::runApp(int i) {
-//    while (numRequests > 0) {
-//
-//        // Проверяем доступность отправителя и получателя
-//        if (apps[sender].isAvailable() && apps[receiver].isAvailable()) {
-//            // Обмен данными между отправителем и получателем
-//            dataExchange(sender, receiver);
-//        }
-//        else {
-//            // Обработка случая, когда отправитель или получатель недоступны
-//            // Например, ожидание доступности или выбор других приложений
-//            // ...
-//
-//            // Пропустить текущую итерацию и перейти к следующей
-//            continue;
-//        }
-//
-//        // Уменьшаем счетчик оставшихся запросов
-//        numRequests--;
-//    }
-//   // stop();
-//}
+#pragma once
+#include "AppManager.h"
+AppManager::AppManager(int number_of_apps, int reqnumber, int period) : AppNumber(number_of_apps), reqnumber(reqnumber), period(period)
+{
+    createApps();
+    startAllApps();
+}
+AppManager::~AppManager() {
+    stopAllApps();
+    deleteApps();
+}
+void AppManager::createApps() {
+    Que = std::make_shared<MessageQueue>();
+    id_gen = std::make_shared<UniqueIdGenerator>();
+    for (int i = 0; i < AppNumber; i++) {
+        AppModel* app = new AppModel("127.0.0.1", generatePort(), Que, id_gen);
+        addApp(app);
+    }
+}
+void AppManager::deleteApps() {
+    for (AppModel* app : apps) {
+        delete app;
+    }
+    apps.clear();
+}
+
+int AppManager::generatePort() {
+    std::lock_guard <std::mutex> lock(mt);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(5000, 6000);
+    int port;
+    bool isUnique = false;
+    while (!isUnique) {
+        port = distrib(gen);
+        isUnique = isPortUnique(port);
+    }
+    return port;
+}
+
+bool AppManager::isPortUnique(int port) {
+    for (AppModel* app : apps) {
+        if (app->getPort() == port) {
+            return false;
+        }
+    }
+    return true;
+}
+void AppManager::addApp(AppModel* app) {
+    apps.push_back(app);
+}
+
+void AppManager::startAllApps() {
+    setzeroVC();
+    for (AppModel* app : apps) {
+        app->start_recv();
+    }
+
+}
+void AppManager::setzeroVC()
+{
+    VectorClock zerovc(AppNumber, 0);
+    for (int i = 0; i < AppNumber; i++) {
+        zerovc.add_value(apps[i]->getPort(), 0);
+    }
+    for (int i = 0; i < AppNumber; i++) {
+        apps[i]->setVC(zerovc);
+    }
+}
+void AppManager::stopAllApps() {
+    for (AppModel* app : apps) {
+        app->stop_recv();
+    }
+}
+
+void AppManager::run() {
+    std::random_device rd;
+    std::uniform_int_distribution<size_t> dist(0, apps.size() - 1);
+    std::vector<std::mt19937> generators(apps.size());  // Создаем вектор генераторов случайных чисел
+
+    for (size_t i = 0; i < apps.size(); ++i) {
+        generators[i] = std::mt19937(rd());  // Инициализируем генераторы случайных чисел
+    }
+
+    std::vector<std::thread> threads;
+    std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();  // Запоминаем начальное время
+    for (size_t i = 0; i < apps.size(); ++i) {
+        threads.emplace_back([&, i]() {  // Захватываем генератор по ссылке и индекс по значению
+            std::mt19937& gen = generators[i];  // Получаем ссылку на генератор случайных чисел
+            while (reqnumber > 0) {
+                size_t index = dist(gen);
+                AppModel* randomApp = getRandomApp(apps[i]);
+                apps[i]->sendDataToRemoteAppModel(randomApp->getAddr(), randomApp->getPort());
+                reqnumber--;
+                std::this_thread::sleep_for(std::chrono::milliseconds(period));
+            }
+            });
+    }
+    for (std::thread& thread : threads) {
+
+        thread.join();
+    }
+    std::chrono::steady_clock::time_point endTime = std::chrono::steady_clock::now();  // Запоминаем конечное время
+
+    std::chrono::duration<double> duration = endTime - startTime;  // Вычисляем продолжительность выполнения в секундах
+    std::cout << "Total execution time: " << duration.count() << " seconds" << std::endl;
+
+
+}
+AppModel* AppManager::getRandomApp(AppModel* app) {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<size_t> dist(0, apps.size() - 1);
+
+        while (true) {
+            size_t index = dist(gen);
+            AppModel* randomApp = apps[index];
+            if (randomApp != app) {
+                return randomApp;
+            }
+        }
+}

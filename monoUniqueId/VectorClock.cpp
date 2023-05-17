@@ -31,6 +31,10 @@ void VectorClock::setAppId(int port)
 {
     app_id_ = port;
 }
+int VectorClock::getValueByPort(int port)
+{
+    return clock_[port];
+}
 bool VectorClock::operator<=(const VectorClock& other) const {
     for (const auto& entry : clock_) {
         int app_id = entry.first;

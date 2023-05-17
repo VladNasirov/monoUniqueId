@@ -1,4 +1,5 @@
 #pragma once
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include "UniqueIdGenerator.h"
 #include <winsock2.h>
 #include <WS2tcpip.h>
@@ -45,7 +46,6 @@ public:
     {
         request_id = id;
     }
-
 
     std::string GetSourceAddressAsString() const {
         char buffer[INET_ADDRSTRLEN];

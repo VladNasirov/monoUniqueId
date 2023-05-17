@@ -12,13 +12,14 @@ UniqueIdGenerator::UniqueIdGenerator(UniqueIdGenerator& other)
 }
 
 // Метод для генерации уникального идентификатора на основе временной метки
-std::string UniqueIdGenerator::generateUniqueId(int port, std::chrono::nanoseconds server_time) {
+std::string UniqueIdGenerator::generateUniqueId(int timestomp, int port, std::chrono::nanoseconds server_time) {
     std::lock_guard<std::mutex> lock(mtx_);
+
     auto now = std::chrono::system_clock::now();
     auto duration = now.time_since_epoch();
     auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
 
-    // Учитываем разрешающую способность системного таймера
+    //// Учитываем разрешающую способность системного таймера
     auto resolution = std::chrono::system_clock::period::den / std::chrono::system_clock::period::num;
     nanoseconds -= nanoseconds % resolution;
 
@@ -37,7 +38,8 @@ std::string UniqueIdGenerator::generateUniqueId(int port, std::chrono::nanosecon
 
     // Составляем идентификатор из временной метки, случайного числа и идентификатора сервера
     std::ostringstream os;
-    os << std::setfill('0') << std::setw(20) << nanoseconds;
+    os << std::setfill('0') << std::setw(10) << timestomp;
+    os << std::setfill('0') << std::setw(10) << nanoseconds;
     os << std::setfill('0') << std::setw(20) << random_number;
     os << std::setfill('0') << std::setw(5) << port;
     os << std::setfill('0') << std::setw(20) << server_nanoseconds;
