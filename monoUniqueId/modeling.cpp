@@ -1,18 +1,14 @@
+#pragma once
 #include "AppManager.h"
-#include "memory"
-#include <vector>
-#include <mutex>
-#include <condition_variable>
-#include <algorithm>
 
 int main()
 {
-    int number_of_apps = 5;
-    int period = 10; // milliseconds
-    int requestsnumber = 100;
+    int number_of_apps = 10;
+    int period = 100; // milliseconds
+    int requestsnumber = 1000;
     bool run = true;
 
     AppManager Run(number_of_apps, requestsnumber, period);
-    Run.stop();
+    Run.run();
     return 0;
 }
