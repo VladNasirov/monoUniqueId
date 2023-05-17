@@ -132,16 +132,18 @@
   <ItemGroup>
     <ClCompile Include="AppManager.cpp" />
     <ClCompile Include="AppModel.cpp" />
+    <ClCompile Include="MessageQueue.cpp" />
     <ClCompile Include="modeling.cpp" />
-    <ClCompile Include="RequestQueue.cpp" />
     <ClCompile Include="UniqueIdGenerator.cpp" />
+    <ClCompile Include="VectorClock.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AppManager.h" />
     <ClInclude Include="AppModel.h" />
     <ClInclude Include="message.h" />
-    <ClInclude Include="RequestQueue.h" />
+    <ClInclude Include="MessageQueue.h" />
     <ClInclude Include="UniqueIdGenerator.h" />
+    <ClInclude Include="VectorClock.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

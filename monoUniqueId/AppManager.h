@@ -15,7 +15,7 @@ public:
     }
     void createApps() {
         for (int i = 0; i < AppNumber; i++) {
-            AppModel* app = new AppModel("127.0.0.1", generatePort(), id_gen);
+            AppModel* app = new AppModel("127.0.0.1", generatePort(), Que, id_gen);
             addApp(app);
         }
     }
@@ -53,11 +53,21 @@ public:
     }
 
     void startAllApps() {
+        setzeroVC();
         for (AppModel* app : apps) {
             app->start_recv();
         }
     }
-
+    void setzeroVC()
+    {
+        VectorClock zerovc(AppNumber, 0);
+        for (int i = 0; i < AppNumber; i++) {
+            zerovc.add_value(apps[i]->getPort(), 0);
+        }
+        for (int i = 0; i < AppNumber; i++) {
+            apps[i]->setVC(zerovc);
+        }
+    }
     void stopAllApps() {
         for (AppModel* app : apps) {
             app->stop_recv();
@@ -90,6 +100,7 @@ public:
         for (std::thread& thread : threads) {
             thread.join();
         }
+        
         std::chrono::steady_clock::time_point endTime = std::chrono::steady_clock::now();  // «апоминаем конечное врем€
 
         std::chrono::duration<double> duration = endTime - startTime;  // ¬ычисл€ем продолжительность выполнени€ в секундах
@@ -102,8 +113,8 @@ private:
     int reqnumber;
     int period;
     std::vector<AppModel*> apps;
+    MessageQueue Que;
     UniqueIdGenerator id_gen;
-
     AppModel* getRandomApp(AppModel* app) {
         std::random_device rd;
         std::mt19937 gen(rd());

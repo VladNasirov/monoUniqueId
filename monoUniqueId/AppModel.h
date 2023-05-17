@@ -1,7 +1,7 @@
 #pragma once
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include "UniqueIdGenerator.h"
-#include "message.h"
+#include "MessageQueue.h"
 #include <string>
 #include <thread>
 #include "mysql_connection.h"
@@ -11,18 +11,11 @@
 
 
 
-enum class ServerState {
-    kIdle,       
-    kSending,   
-    kReceiving   
-};
 class AppModel {
 public:
-    AppModel(const char* ip_address, int port_number, UniqueIdGenerator& idgen);
+    AppModel(const char* ip_address, int port_number, MessageQueue& MesQue, UniqueIdGenerator& idgen);
     AppModel(const AppModel& other);
     ~AppModel();
-    void setState(ServerState state);
-    ServerState getState();
     bool sendDataToRemoteAppModel(const char* remoteIp, int remotePort);
     int getCounter();
     std::chrono::nanoseconds uptime() const;
@@ -30,7 +23,7 @@ public:
     void insertMessageToDBbyId(Message& msg);
     void insertMessageToDBbyUniqueId(Message& msg);
     void close();
-    
+    void setVC(VectorClock vec);
     void incCounter();
     void decCounter();
     
@@ -45,16 +38,18 @@ private:
     const char* SERVER_IP;
     int PORT;
     bool is_recv;
-    UniqueIdGenerator id_gen;
     static const int BUFFER_SIZE = 1024;
     WSADATA wsaData;
     SOCKET sendSocket;
     SOCKET recvSocket;
     int counter_;
     std::chrono::time_point<std::chrono::system_clock> start_time_;
-    ServerState state_;
     std::mutex mutex_;
     std::mutex dbMutex_;
     std::mutex counterMutex_;
+    UniqueIdGenerator id_gen;
+    VectorClock vc;
+    MessageQueue* MesQue;
 
+    
 };

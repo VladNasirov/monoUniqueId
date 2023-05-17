@@ -4,12 +4,11 @@ std::mutex uniquedb_mtx;
 std::mutex db_mtx;
 std::mutex sendMutex_;
 std::mutex recvMutex_;
-AppModel::AppModel(const char* ip_address, int port_number, UniqueIdGenerator& idgen): id_gen(idgen) {
+AppModel::AppModel(const char* ip_address, int port_number, MessageQueue& MesQue, UniqueIdGenerator& idgen):id_gen(idgen) {
     start_time_ = std::chrono::system_clock::now();
     SERVER_IP = ip_address;
     PORT = port_number;
     counter_ = 0;
-    state_ = ServerState::kIdle;
     is_recv = false;
     {
 
@@ -43,7 +42,6 @@ AppModel::AppModel(const AppModel& other) {
     wsaData = other.wsaData;
     counter_ = other.counter_;
     start_time_ = other.start_time_;
-    state_ = other.state_;
 }
 
 AppModel::~AppModel() {
@@ -56,26 +54,7 @@ void AppModel::close()
     closesocket(recvSocket);
     WSACleanup();
 }
-void AppModel::setState(ServerState state) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    state_ = state;
-}
 
-ServerState AppModel::getState() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return state_;
-}
-bool AppModel::isAvailable()
-{
-    if (getState() == ServerState::kIdle)
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
 bool AppModel::sendDataToRemoteAppModel(const char* remoteIp, int remotePort) {
     
     WSADATA wsaData;
@@ -105,9 +84,9 @@ bool AppModel::sendDataToRemoteAppModel(const char* remoteIp, int remotePort) {
     {
         std::lock_guard<std::mutex> lock(sendMutex_);
         std::string request;
-        
-            incCounter();
-        Message message(counter_, client_addr, "0");
+        vc.increment(PORT);
+        incCounter();
+        Message message(counter_, client_addr, remotePort, "0", vc);
        /* std::cout << "Send Counter = " << counter_ << std::endl;*/
         std::ostringstream oss(request);
         oss << message;
@@ -128,6 +107,13 @@ bool AppModel::sendDataToRemoteAppModel(const char* remoteIp, int remotePort) {
     //state_ = ServerState::kIdle;
     std::this_thread::sleep_for(std::chrono::milliseconds(700));
     return true;
+}
+
+
+void AppModel::setVC(VectorClock vec)
+{
+    vc = vec;
+    vc.setAppId(PORT);
 }
 
 int AppModel::getCounter()
@@ -185,15 +171,14 @@ bool AppModel::receiveDataFromRemoteAppModel() {
                 }
                 else
             {
-                std::lock_guard<std::mutex> lock(recvMutex_);
+                
                 std::string message_str(buffer, bytesReceived);
                 std::istringstream iss(message_str);
                 Message message;
                 iss >> message;
-                /*std::cout << "App with port " << PORT << " received address with port " << message.client_address.sin_port << std::endl;
-                std::cout << "Received Counter = " << message.counter << " and client_address " << message.GetSourceAddressAsString() << std::endl;*/
+                vc.update(message.MessageClock);
+                MesQue->Push(message);
                 insertMessageToDBbyId(message);
-                insertMessageToDBbyUniqueId(message);
             }
         }
         closesocket(clientSocket);
@@ -213,6 +198,7 @@ int AppModel::getPort()
     return PORT;
 }
 void AppModel::insertMessageToDBbyId(Message& msg) {
+    std::lock_guard<std::mutex> lock(db_mtx);
     try {
         // MySQL
         sql::Driver* driver;
@@ -239,6 +225,7 @@ void AppModel::insertMessageToDBbyId(Message& msg) {
 }
 
 void AppModel::insertMessageToDBbyUniqueId(Message& msg) {
+    std::lock_guard<std::mutex> lock(db_mtx);
     try {
         msg.changeRequestId(id_gen.generateUniqueId(PORT, uptime()));
         // MySQL
@@ -261,6 +248,25 @@ void AppModel::insertMessageToDBbyUniqueId(Message& msg) {
 
     }
     catch (sql::SQLException& e) {
-        std::cout << "SQL error: " << e.what() << std::endl;
+       std::cout << "SQL error: " << e.what() << std::endl;
+    }
+}
+void AppModel::processMessageQueue() {
+    while (true) {
+        // Получаем сообщения с нужным портом из очереди
+        std::vector<Message> messages = MesQue.GetMessagesByPort(PORT);
+
+        // Обрабатываем каждое сообщение
+        for (const auto& message : messages) {
+            // Генерируем уникальный идентификатор
+            std::string uniqueId = id_gen.generateUniqueId(PORT, uptime());
+
+            // Создаем копию сообщения и изменяем идентификатор
+            Message modifiedMessage = message;
+            modifiedMessage.changeRequestId(uniqueId);
+
+            // Вставляем сообщение в базу данных
+            insertMessageToDBbyUniqueId(modifiedMessage);
+        }
     }
 }
